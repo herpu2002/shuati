@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#16b364">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="刷题助手">
+<title>刷题助手</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="app">
+
+  <!-- 首页 -->
+  <section class="screen active" id="screen-home">
+    <header class="home-head">
+      <h1>刷题助手</h1>
+      <span class="muted" id="home-date"></span>
+    </header>
+    <div class="stat-row">
+      <div class="stat"><b id="st-practiced">0</b><span>累计刷题</span></div>
+      <div class="stat"><b id="st-acc">--</b><span>正确率</span></div>
+      <div class="stat"><b id="st-today">0</b><span>今日已刷</span></div>
+      <div class="stat" id="st-wrong-card"><b id="st-wrong">0</b><span>待消灭错题</span></div>
+    </div>
+    <div class="progress-card">
+      <div class="prog-head">
+        <span>已覆盖题库</span>
+        <span class="prog-num"><b id="st-prog-cur">0</b> / <span id="st-prog-total">0</span></span>
+      </div>
+      <div class="prog-bar"><div class="prog-fill" id="st-prog-fill"></div></div>
+      <div class="prog-pct muted" id="st-prog-pct">0%</div>
+    </div>
+    <div class="module-card" id="card-practice">
+      <div class="m-main"><div class="m-title">刷题练习</div><div class="m-desc">每次20题 · 未刷题和错题优先 · 即时判分</div></div>
+      <span class="m-arrow">›</span>
+    </div>
+    <div class="module-card" id="card-judge">
+      <div class="m-main"><div class="m-title">判断专项</div><div class="m-desc">只练判断题 · 每次20题 · 强化记忆</div></div>
+      <span class="m-arrow">›</span>
+    </div>
+    <div class="module-card" id="card-changes">
+      <div class="m-main"><div class="m-title">法条变动对照</div><div class="m-desc">旧法命题 · 新规对照 · 集中翻阅</div></div>
+      <span class="m-badge" id="changes-badge">0</span><span class="m-arrow">›</span>
+    </div>
+    <div class="module-card" id="card-wrong">
+      <div class="m-main"><div class="m-title">错题本</div><div class="m-desc">重做消灭 · 连对2次自动移出</div></div>
+      <span class="m-badge" id="wrong-badge">0</span><span class="m-arrow">›</span>
+    </div>
+    <div class="module-card" id="card-notes">
+      <div class="m-main"><div class="m-title">我的笔记</div><div class="m-desc">题卡内随时记录 · 解题思路与易错点</div></div>
+      <span class="m-badge" id="note-badge">0</span><span class="m-arrow">›</span>
+    </div>
+    <div class="module-card" id="card-exam">
+      <div class="m-main"><div class="m-title">模拟试卷</div><div class="m-desc">100题 · 45分钟 · <span id="exam-last">未考过</span></div></div>
+      <span class="m-arrow">›</span>
+    </div>
+    <div class="quote-card" id="home-quote">
+      <div class="quote-text" id="quote-text"></div>
+      <div class="quote-from muted" id="quote-from"></div>
+    </div>
+    <button class="link-danger" id="btn-reset">清空数据</button>
+  </section>
+
+  <!-- 刷题 / 错题重做 -->
+  <section class="screen" id="screen-practice">
+    <header class="nav-bar">
+      <button class="nav-btn" id="p-back">‹ 返回</button>
+      <span class="nav-title" id="p-title">刷题</span>
+      <button class="nav-btn" id="p-end">结束</button>
+    </header>
+    <div id="p-body"></div>
+  </section>
+
+  <!-- 法条变动对照 -->
+  <section class="screen" id="screen-changes">
+    <header class="nav-bar">
+      <button class="nav-btn" id="ch-back">‹ 返回</button>
+      <span class="nav-title">法条变动对照</span>
+      <button class="nav-btn" id="ch-errata">我的纠错</button>
+    </header>
+    <div class="filter-row" id="ch-filter"></div>
+    <div id="ch-list"></div>
+  </section>
+
+  <!-- 错题本列表 -->
+  <section class="screen" id="screen-wrong">
+    <header class="nav-bar">
+      <button class="nav-btn" id="w-back">‹ 返回</button>
+      <span class="nav-title">错题本</span>
+      <button class="nav-btn" id="w-redo">重做</button>
+    </header>
+    <div class="filter-row" id="w-filter"></div>
+    <div id="w-list"></div>
+  </section>
+
+  <!-- 笔记列表 -->
+  <section class="screen" id="screen-notes">
+    <header class="nav-bar">
+      <button class="nav-btn" id="n-back">‹ 返回</button>
+      <span class="nav-title">我的笔记</span>
+      <span class="nav-spacer"></span>
+    </header>
+    <div class="filter-row" id="n-filter"></div>
+    <div id="n-list"></div>
+  </section>
+
+  <!-- 考试说明 -->
+  <section class="screen" id="screen-exam-info">
+    <header class="nav-bar">
+      <button class="nav-btn" id="ei-back">‹ 返回</button>
+      <span class="nav-title">模拟试卷</span>
+      <span class="nav-spacer"></span>
+    </header>
+    <div class="q-card">
+      <ul class="exam-rules">
+        <li>共 100 题：单选 40 · 多选 30 · 判断 30</li>
+        <li>每题 1 分，满分 100 分，限时 45 分钟</li>
+        <li>倒计时结束自动交卷；交卷前可用答题卡回跳修改</li>
+        <li>随机组卷：未刷过的题与错题权重更高</li>
+        <li>多选题完全选对才得分；考试错题自动进错题本</li>
+      </ul>
+      <div class="last-exam" id="ei-last"></div>
+      <button class="btn btn-primary btn-block" id="ei-start">开始考试</button>
+    </div>
+  </section>
+
+  <!-- 考试答题 -->
+  <section class="screen" id="screen-exam">
+    <header class="nav-bar">
+      <span class="nav-timer" id="e-timer">45:00</span>
+      <span class="nav-title">模拟试卷</span>
+      <button class="nav-btn" id="e-submit">交卷</button>
+    </header>
+    <div id="e-body"></div>
+  </section>
+
+  <!-- 成绩页 -->
+  <section class="screen" id="screen-result">
+    <header class="nav-bar">
+      <button class="nav-btn" id="r-back">‹ 返回</button>
+      <span class="nav-title">考试成绩</span>
+      <span class="nav-spacer"></span>
+    </header>
+    <div id="r-body"></div>
+  </section>
+
+</div>
+
+<div id="toast"></div>
+<div class="modal-mask" id="modal-summary"><div class="modal" id="summary-box"></div></div>
+<div class="modal-mask" id="modal-palette"><div class="modal modal-wide" id="palette-box"></div></div>
+<div class="modal-mask" id="modal-confirm"><div class="modal" id="confirm-box"></div></div>
+
+<script src="js/questions-data.js"></script>
+<script src="js/progress-map.js"></script>
+<script src="js/quotes-data.js"></script>
+<script src="js/analysis-data.js"></script>
+<script src="js/app.js"></script>
+<script>
+// PWA 离线支持：仅在 http(s) 安全上下文注册（Android 壳走 file:// 跳过）
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  navigator.serviceWorker.register('sw.js').catch(function () {});
+}
+</script>
+</body>
+</html>
