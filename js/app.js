@@ -244,11 +244,11 @@
       noteBadge.textContent = noteCount;
       noteBadge.classList.toggle('zero', noteCount === 0);
     }
-    var changesBadge = el('changes-badge');
-    if (changesBadge) {
+    var chDesc = el('changes-desc');
+    if (chDesc) {
       var outCount = outdatedQuestions().length;
-      changesBadge.textContent = outCount;
-      changesBadge.classList.toggle('zero', outCount === 0);
+      var susCount = suspectQuestions().length;
+      chDesc.textContent = '旧法题 ' + outCount + (susCount ? ' · 疑似错题 ' + susCount : '') + ' · 集中翻阅';
     }
     renderHomeQuote();
   }
@@ -257,7 +257,8 @@
   var practice = { mode: 'practice', list: [], idx: 0, done: 0, correct: 0, judged: false, selected: [], pendingPick: null };
 
   function startPractice(mode, typeFilter) {
-    practice.mode = typeFilter === 'judge' ? 'judge' : mode;
+    practice.typeFilter = typeFilter || null;
+    practice.mode = (mode === 'redo') ? 'redo' : (typeFilter ? typeFilter : mode);
     if (mode === 'redo') {
       // 错题重做：错题本随机打乱；题型专项下只取该题型的错题
       var wrongList = Object.keys(wrongBook).map(function (id) { return byId[id]; }).filter(Boolean);
@@ -285,7 +286,7 @@
 
   function renderPractice() {
     var q = practice.list[practice.idx];
-    var titleMap = { practice: '刷题练习', redo: '错题重做', judge: '判断专项' };
+    var titleMap = { practice: '刷题练习', redo: '错题重做', judge: '判断专项', multiple: '多选专项', single: '单选专项' };
     el('p-title').textContent = titleMap[practice.mode] || '刷题练习';
     var body = el('p-body');
     var noTxt = '第 ' + (practice.idx + 1) + ' / ' + practice.list.length + ' 题';
@@ -422,7 +423,8 @@
     openModal('modal-summary');
     el('sum-continue').addEventListener('click', function () {
       closeModal('modal-summary');
-      if (finished) { startPractice(practice.mode); }
+      // 专项模式要带题型过滤，否则"再刷一轮"会退化成全题库
+      if (finished) { startPractice(practice.typeFilter ? 'practice' : practice.mode, practice.typeFilter); }
     });
     el('sum-home').addEventListener('click', function () {
       closeModal('modal-summary');
@@ -433,6 +435,7 @@
 
   // ================= 错题本 =================
   var wrongFilter = 'all';
+  var wrongRedoType = 'all';
 
   function renderWrongFilter() {
     var row = el('w-filter');
@@ -446,7 +449,31 @@
     });
   }
 
+  function renderWrongRedoFilter() {
+    var row = el('w-redo-filter');
+    if (!row) return;
+    var counts = { all: 0, single: 0, multiple: 0, judge: 0 };
+    Object.keys(wrongBook).forEach(function (id) {
+      var q = byId[id];
+      if (q) { counts.all++; counts[q.type]++; }
+    });
+    row.innerHTML = '';
+    var lab = document.createElement('span');
+    lab.className = 'muted';
+    lab.style.cssText = 'align-self:center;font-size:13px';
+    lab.textContent = '重做出题：';
+    row.appendChild(lab);
+    [['all', '全部'], ['single', '单选'], ['multiple', '多选'], ['judge', '判断']].forEach(function (p) {
+      var c = document.createElement('button');
+      c.className = 'f-chip' + (wrongRedoType === p[0] ? ' on' : '');
+      c.textContent = p[1] + '(' + counts[p[0]] + ')';
+      c.addEventListener('click', function () { wrongRedoType = p[0]; renderWrongRedoFilter(); });
+      row.appendChild(c);
+    });
+  }
+
   function renderWrongList() {
+    renderWrongRedoFilter();
     var list = el('w-list');
     var ids = Object.keys(wrongBook).filter(function (id) {
       var q = byId[id];
@@ -520,6 +547,11 @@
 
   function getAn(qid) { return ANALYSIS[qid] || null; }
   function isOutdated(qid) { var a = ANALYSIS[qid]; return !!(a && a.o); }
+  // 疑似错题（AI 复核发现题干或答案有误）：ANALYSIS[qid].s=1，sr 为原因
+  function isSuspect(qid) { var a = ANALYSIS[qid]; return !!(a && a.s); }
+  function suspectQuestions() {
+    return BANK.filter(function (q) { return isSuspect(q.id); });
+  }
   // 从法条依据字段提取《法律名》作为分组
   function lawNameOf(an) {
     if (an && an.r) { var m = String(an.r).match(/《[^》]+》/); if (m) return m[0]; }
@@ -540,15 +572,25 @@
     var kw = stem + ' ' + (law === '其他' ? '法律题解析' : law + ' 法条');
     return 'https://www.baidu.com/s?wd=' + encodeURIComponent(kw);
   }
-  // 解析区：冲突横幅 + 解析卡（无预置解析时仅显示联网搜索按钮）
-  // listBtn=true 时搜索按钮走 class+data-qid（用于一页多题的成绩列表）
-  function analysisBlockHtml(q, prefix, listBtn) {
+  // 仅警示横幅（旧法/疑似错题），不含解析正文：用于速刷答题前置提示
+  function warnBannerHtml(q) {
     var an = getAn(q.id);
     var html = '';
     if (an && an.o) {
       html += '<div class="law-warn">⚠️ 本题依据旧法命题，现行法已修改；判分仍按题库原答案，实际适用以新规为准' +
         (an.n ? '<div class="law-warn-sub">' + esc(an.n) + '</div>' : '') + '</div>';
     }
+    if (an && an.s) {
+      html += '<div class="suspect-warn">⚠️ 本题疑似有误（题干或答案待人工复核），判分仍按题库答案，请留意甄别' +
+        (an.sr ? '<div class="suspect-warn-sub">' + esc(an.sr) + '</div>' : '') + '</div>';
+    }
+    return html;
+  }
+  // 解析区：冲突横幅 + 解析卡（无预置解析时仅显示联网搜索按钮）
+  // listBtn=true 时搜索按钮走 class+data-qid（用于一页多题的成绩列表）
+  function analysisBlockHtml(q, prefix, listBtn) {
+    var an = getAn(q.id);
+    var html = warnBannerHtml(q);
     if (an && (an.a || an.r)) {
       html += '<div class="analysis-card">' +
         (an.r ? '<div class="an-law">📖 ' + esc(an.r) + '</div>' : '') +
@@ -603,9 +645,12 @@
     el('er-close').addEventListener('click', function () { closeModal('modal-confirm'); });
   }
 
-  // ---------- 法条变动对照 ----------
-  var changeFilter = 'all';   // all 或《法律名》
-  var chView = 'changes';     // changes | errata
+  // ---------- 法条变动与错题标记 ----------
+  var changeFilter = 'all';   // all 或《法律名》（法条变动视图）
+  var suspectFilter = 'all';  // all 或题型（疑似错题视图）
+  var chView = 'changes';     // changes | errata（errata 为"我的纠错"覆盖层视图）
+  var chTab = 'changes';      // changes | suspect（顶部主 Tab）
+
   function changeGroups() {
     var m = {};
     outdatedQuestions().forEach(function (q) {
@@ -615,13 +660,102 @@
     return m;
   }
   function enterChanges() {
-    chView = 'changes';
+    chView = 'list';
+    chTab = 'changes';
     el('ch-errata').textContent = '我的纠错';
+    el('ch-tabs').style.display = '';
     el('ch-filter').style.display = '';
     changeFilter = 'all';
-    renderChangesFilter();
-    renderChangesList();
+    suspectFilter = 'all';
+    renderChTabs();
+    renderChFilterRow();
+    renderChList();
     showScreen('screen-changes');
+  }
+  // 顶部主 Tab：法条变动 / 疑似错题
+  function renderChTabs() {
+    var row = el('ch-tabs');
+    row.innerHTML = '';
+    var tabs = [['changes', '法条变动(' + outdatedQuestions().length + ')'],
+      ['suspect', '疑似错题(' + suspectQuestions().length + ')']];
+    tabs.forEach(function (p) {
+      var c = document.createElement('button');
+      c.className = 'f-chip' + (chTab === p[0] ? ' on' : '');
+      c.textContent = p[1];
+      c.addEventListener('click', function () {
+        chTab = p[0];
+        renderChTabs(); renderChFilterRow(); renderChList();
+      });
+      row.appendChild(c);
+    });
+  }
+  function renderChFilterRow() {
+    if (chTab === 'changes') renderChangesFilter();
+    else renderSuspectFilter();
+  }
+  function renderChList() {
+    if (chTab === 'changes') renderChangesList();
+    else renderSuspectList();
+  }
+  function renderSuspectFilter() {
+    var row = el('ch-filter');
+    row.innerHTML = '';
+    [['all', '全部'], ['single', '单选'], ['multiple', '多选'], ['judge', '判断']].forEach(function (p) {
+      var c = document.createElement('button');
+      c.className = 'f-chip' + (suspectFilter === p[0] ? ' on' : '');
+      c.textContent = p[1];
+      c.addEventListener('click', function () { suspectFilter = p[0]; renderSuspectFilter(); renderSuspectList(); });
+      row.appendChild(c);
+    });
+  }
+  function renderSuspectList() {
+    var list = el('ch-list');
+    var qs = suspectQuestions();
+    if (suspectFilter !== 'all') qs = qs.filter(function (q) { return q.type === suspectFilter; });
+    if (!qs.length) {
+      list.innerHTML = '<div class="empty-tip">暂无疑似错题<br>题库复核发现题干或答案有误时会在此列出</div>';
+      return;
+    }
+    list.innerHTML = '';
+    qs.forEach(function (q) {
+      var an = getAn(q.id);
+      var div = document.createElement('div');
+      div.className = 'w-item suspect-item';
+      div.innerHTML =
+        '<div class="w-meta" style="margin:0 0 6px"><span class="w-type">' + TYPE_NAME[q.type] + '</span></div>' +
+        '<div class="w-stem">' + esc(q.stem) + '</div>' +
+        '<div class="sus-reason">疑似问题：' + esc((an.sr || '题干或答案待人工复核').slice(0, 90)) +
+        ((an.sr || '').length > 90 ? '…' : '') + '</div>' +
+        '<div class="w-meta"><span class="sus-ans">题库答案 ' + esc(q.answer) + '</span></div>';
+      div.addEventListener('click', function () { showSuspectDetail(q); });
+      list.appendChild(div);
+    });
+  }
+  function showSuspectDetail(q) {
+    var an = getAn(q.id);
+    var optsHtml = q.options.map(function (opt, i) {
+      var v = q.type === 'judge' ? opt : LETTERS[i];
+      var ok = q.type === 'judge' ? q.answer === v : q.answer.indexOf(v) >= 0;
+      return '<div class="opt' + (ok ? ' ok' : '') + '"><span class="opt-k">' +
+        (q.type === 'judge' ? '' : LETTERS[i]) + '</span><span class="opt-t">' + esc(opt) + '</span></div>';
+    }).join('');
+    el('summary-box').innerHTML =
+      '<span class="chip">' + TYPE_NAME[q.type] + '</span>' +
+      '<div class="q-stem" style="margin:10px 0">' + esc(q.stem) + '</div>' +
+      '<div class="opts locked">' + optsHtml + '</div>' +
+      '<div class="suspect-warn" style="margin-top:10px">⚠️ 本题疑似有误，题库原答案为 <b>' + esc(q.answer) + '</b>' +
+      (an.sf ? '，复核建议答案：<b>' + esc(an.sf) + '</b>' : '') +
+      '，请留意甄别' + (an.sr ? '<div class="suspect-warn-sub">' + esc(an.sr) + '</div>' : '') + '</div>' +
+      (an.r ? '<div class="an-law" style="margin-top:8px">📖 ' + esc(an.r) + '</div>' : '') +
+      (an.a ? '<div class="analysis-card"><div class="an-text">' + esc(an.a) + '</div></div>' : '') +
+      '<div class="an-search-row" style="margin-top:8px"><button class="btn btn-ghost btn-sm" id="sud-search">🔍 联网搜解析</button></div>' +
+      '<div class="btn-row" style="margin-top:10px;grid-template-columns:1fr 1fr">' +
+      '<button class="btn btn-ghost btn-sm' + (errataBook[q.id] ? ' has' : '') + '" id="sud-errata">🚩 标记此题有误</button>' +
+      '<button class="btn btn-primary btn-sm" id="sud-close">关闭</button></div>';
+    openModal('modal-summary');
+    el('sud-close').addEventListener('click', function () { closeModal('modal-summary'); });
+    el('sud-search').addEventListener('click', function () { openExternal(buildSearchUrl(q)); });
+    el('sud-errata').addEventListener('click', function () { closeModal('modal-summary'); openErrata(q.id); });
   }
   function renderChangesFilter() {
     var row = el('ch-filter');
@@ -693,16 +827,18 @@
 
   // ---------- 我的纠错 ----------
   function toggleErrataView() {
-    if (chView === 'changes') {
+    if (chView !== 'errata') {
       chView = 'errata';
-      el('ch-errata').textContent = '返回对照';
+      el('ch-errata').textContent = '返回列表';
+      el('ch-tabs').style.display = 'none';
       el('ch-filter').style.display = 'none';
       renderErrataBook();
     } else {
-      chView = 'changes';
+      chView = 'list';
       el('ch-errata').textContent = '我的纠错';
+      el('ch-tabs').style.display = '';
       el('ch-filter').style.display = '';
-      renderChangesList();
+      renderChTabs(); renderChFilterRow(); renderChList();
     }
   }
   function renderErrataBook() {
@@ -940,6 +1076,193 @@
     });
     showScreen('screen-result');
     renderHome();
+  }
+
+  // ================= 专项练习 =================
+  var SPEC_BASE = { single: '只练单选题 · 每次20题', multiple: '只练多选题 · 每次20题', judge: '只练判断题 · 每次20题' };
+  function enterSpecial() {
+    var dId = { single: 'spec-d-single', multiple: 'spec-d-multiple', judge: 'spec-d-judge' };
+    ['single', 'multiple', 'judge'].forEach(function (t) {
+      var done = 0;
+      byType[t].forEach(function (q) { if (seen[q.id]) done++; });
+      var d = el(dId[t]);
+      if (d) d.textContent = SPEC_BASE[t] + ' · 已刷 ' + done + '/' + byType[t].length;
+    });
+    showScreen('screen-special');
+  }
+
+  // ================= 速刷模式 =================
+  // 宫格按题型展示题库序号：红=做错（在错题本），绿=已刷对，灰=未刷（旧法/争议只在解析里提示）
+  var speed = { type: 'single', runIdx: 0, judged: false, selected: [], timer: null };
+
+  function speedCellCls(q) {
+    if (wrongBook[q.id]) return 'bad';
+    if (seen[q.id]) return 'done';
+    return '';
+  }
+  function enterSpeed() {
+    clearTimeout(speed.timer);
+    renderSpeedTabs();
+    renderSpeedGrid();
+    showScreen('screen-speed');
+  }
+  function renderSpeedTabs() {
+    var row = el('sp-tabs');
+    row.innerHTML = '';
+    ['single', 'multiple', 'judge'].forEach(function (t) {
+      var total = byType[t].length;
+      var done = 0;
+      byType[t].forEach(function (q) { if (seen[q.id]) done++; });
+      var c = document.createElement('button');
+      c.className = 'f-chip' + (speed.type === t ? ' on' : '');
+      c.textContent = TYPE_NAME[t] + ' ' + done + '/' + total;
+      c.addEventListener('click', function () {
+        speed.type = t;
+        renderSpeedTabs(); renderSpeedGrid();
+      });
+      row.appendChild(c);
+    });
+  }
+  function renderSpeedGrid() {
+    var grid = el('sp-grid');
+    var list = byType[speed.type];
+    var html = '';
+    for (var i = 0; i < list.length; i++) {
+      html += '<div class="pal-cell ' + speedCellCls(list[i]) + '" data-i="' + i + '">' + (i + 1) + '</div>';
+    }
+    grid.innerHTML = html;
+  }
+  function startSpeedRun(idx) {
+    speed.runIdx = idx;
+    speed.judged = false;
+    speed.selected = [];
+    clearTimeout(speed.timer);
+    showScreen('screen-speed-run');
+    renderSpeedRun();
+  }
+  function renderSpeedRun() {
+    var list = byType[speed.type];
+    var q = list[speed.runIdx];
+    if (!q) { backToSpeedGrid(); return; }
+    el('sr-title').textContent = TYPE_NAME[speed.type] + ' · 第 ' + (speed.runIdx + 1) + ' / ' + list.length + ' 题';
+    var body = el('sr-body');
+    body.innerHTML = '<div class="q-card">' +
+      '<div class="q-meta"><span class="chip">' + TYPE_NAME[q.type] + ' · 速刷</span>' +
+      '<span class="q-no">序号 ' + (speed.runIdx + 1) + '</span></div>' +
+      '<div class="q-stem">' + esc(q.stem) + '</div>' +
+      '<div class="opts" id="sr-opts"></div>' +
+      '<div id="sr-fb"></div>' +
+      '<div id="sr-analysis"></div>' +
+      '<div id="sr-actions"></div>' +
+      '<div class="note-bar"><button class="btn-note' + (notes[q.id] ? ' has' : '') + '" id="sr-note">📝 笔记' + (notes[q.id] ? ' · 已记' : '') + '</button>' +
+      '<button class="btn-errata' + (errataBook[q.id] ? ' has' : '') + '" id="sr-errata">🚩 纠错</button></div>' +
+      '</div>';
+
+    var wrap = el('sr-opts');
+    q.options.forEach(function (opt, i) {
+      var d = document.createElement('div');
+      d.className = 'opt';
+      d.dataset.val = q.type === 'judge' ? opt : LETTERS[i];
+      d.innerHTML = (q.type === 'multiple' ? '<span class="ck">✓</span>' : '') +
+        '<span class="opt-k">' + (q.type === 'judge' ? '' : LETTERS[i]) + '</span>' +
+        '<span class="opt-t">' + esc(opt) + '</span>';
+      d.addEventListener('click', function () { onSpeedOption(q, d); });
+      wrap.appendChild(d);
+    });
+
+    if (q.type === 'multiple') {
+      var btn = document.createElement('button');
+      btn.className = 'btn btn-primary btn-block';
+      btn.id = 'sr-confirm';
+      btn.textContent = '确认答案';
+      btn.disabled = true;
+      btn.addEventListener('click', function () {
+        judgeSpeed(q, speed.selected.slice().sort().join(''));
+      });
+      el('sr-actions').appendChild(btn);
+    }
+    el('sr-note').addEventListener('click', function () { openNote(q.id); });
+    el('sr-errata').addEventListener('click', function () { openErrata(q.id); });
+  }
+  function onSpeedOption(q, node) {
+    if (speed.judged) return;
+    if (q.type === 'multiple') {
+      var v = node.dataset.val;
+      var idx = speed.selected.indexOf(v);
+      if (idx >= 0) { speed.selected.splice(idx, 1); node.classList.remove('sel'); }
+      else { speed.selected.push(v); node.classList.add('sel'); }
+      var btn = el('sr-confirm');
+      if (btn) btn.disabled = speed.selected.length === 0;
+    } else {
+      // 单选/判断：点一次即判分（速刷求快，做错的题仍进错题本）
+      judgeSpeed(q, node.dataset.val);
+    }
+  }
+  function judgeSpeed(q, picked) {
+    if (speed.judged) return;
+    speed.judged = true;
+    var ok = picked === q.answer;
+    recordAnswer(q, ok, true);
+
+    var wrap = el('sr-opts');
+    wrap.classList.add('locked');
+    var ansSet = q.type === 'multiple' ? q.answer.split('') : [q.answer];
+    var pickSet = q.type === 'multiple' ? picked.split('') : [picked];
+    wrap.querySelectorAll('.opt').forEach(function (n) {
+      var v = n.dataset.val;
+      if (ansSet.indexOf(v) >= 0) n.classList.add('ok');
+      if (pickSet.indexOf(v) >= 0 && ansSet.indexOf(v) < 0) n.classList.add('bad');
+    });
+
+    el('sr-fb').innerHTML = ok
+      ? '<div class="fb fb-ok">回答正确 ✓</div>'
+      : '<div class="fb fb-bad">回答错误 ✗ <span class="fb-ans">正确答案：' + esc(q.answer) + '</span></div>';
+
+    var isLast = nextSpeedIdx(speed.runIdx) < 0;
+    el('sr-actions').innerHTML =
+      '<div class="sr-fb-row">' +
+      '<button class="btn btn-ghost btn-sm" id="sr-view-an">查看解析</button>' +
+      '<button class="btn btn-primary btn-sm" id="sr-next">' + (isLast ? '返回宫格' : '下一题 ›') + '</button>' +
+      '</div>';
+    el('sr-view-an').addEventListener('click', function () {
+      clearTimeout(speed.timer);   // 看解析时停止自动跳题
+      var anBox = el('sr-analysis');
+      if (!anBox.dataset.full) {
+        anBox.innerHTML = analysisBlockHtml(q, 'sr');
+        anBox.dataset.full = '1';
+        bindSearch('sr-search', q);
+      }
+    });
+    el('sr-next').addEventListener('click', function () {
+      clearTimeout(speed.timer);
+      speedNext(isLast);
+    });
+    // 自动连刷：答对 1 秒跳题，答错停留 3 秒便于看清正确答案（点"查看解析"可暂停）
+    if (!isLast) {
+      speed.timer = setTimeout(function () { speedNext(false); }, ok ? 1000 : 3000);
+    }
+  }
+  function nextSpeedIdx(from) {
+    var list = byType[speed.type];
+    for (var i = from + 1; i < list.length; i++) {
+      if (speedCellCls(list[i]) !== 'done') return i;
+    }
+    return -1;
+  }
+  function speedNext(isLast) {
+    var n = nextSpeedIdx(speed.runIdx);
+    if (isLast || n < 0) { toast(n < 0 ? '后续题目均已刷对' : '已到本题型末尾'); backToSpeedGrid(); return; }
+    speed.runIdx = n;
+    speed.judged = false;
+    speed.selected = [];
+    renderSpeedRun();
+    window.scrollTo(0, 0);
+  }
+  function backToSpeedGrid() {
+    clearTimeout(speed.timer);
+    renderSpeedTabs();
+    renderSpeedGrid();
+    showScreen('screen-speed');
   }
 
   // ================= 弹层 =================
@@ -1182,7 +1505,20 @@
     });
 
     el('card-practice').addEventListener('click', function () { startPractice('practice'); });
-    el('card-judge').addEventListener('click', function () { startPractice('practice', 'judge'); });
+    el('card-special').addEventListener('click', enterSpecial);
+    el('spec-back').addEventListener('click', function () { showScreen('screen-home'); renderHome(); });
+    el('spec-single').addEventListener('click', function () { startPractice('practice', 'single'); });
+    el('spec-multiple').addEventListener('click', function () { startPractice('practice', 'multiple'); });
+    el('spec-judge').addEventListener('click', function () { startPractice('practice', 'judge'); });
+    el('card-speed').addEventListener('click', enterSpeed);
+    el('sp-back').addEventListener('click', function () { showScreen('screen-home'); renderHome(); });
+    el('sr-back').addEventListener('click', backToSpeedGrid);
+    // 宫格点击走事件委托，避免上千个监听器
+    el('sp-grid').addEventListener('click', function (e) {
+      var cell = e.target;
+      while (cell && cell !== this && !(cell.classList && cell.classList.contains('pal-cell'))) cell = cell.parentNode;
+      if (cell && cell.dataset && cell.dataset.i != null) startSpeedRun(parseInt(cell.dataset.i, 10));
+    });
     el('card-wrong').addEventListener('click', function () {
       wrongFilter = 'all';
       renderWrongFilter(); renderWrongList();
@@ -1204,7 +1540,7 @@
     el('p-end').addEventListener('click', endPracticeSession);
 
     el('w-back').addEventListener('click', function () { showScreen('screen-home'); });
-    el('w-redo').addEventListener('click', function () { startPractice('redo'); });
+    el('w-redo').addEventListener('click', function () { startPractice('redo', wrongRedoType === 'all' ? null : wrongRedoType); });
 
     el('n-back').addEventListener('click', function () { showScreen('screen-home'); });
 

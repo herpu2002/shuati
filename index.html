@@ -40,13 +40,17 @@
       <div class="m-main"><div class="m-title">刷题练习</div><div class="m-desc">每次20题 · 未刷题和错题优先 · 即时判分</div></div>
       <span class="m-arrow">›</span>
     </div>
-    <div class="module-card" id="card-judge">
-      <div class="m-main"><div class="m-title">判断专项</div><div class="m-desc">只练判断题 · 每次20题 · 强化记忆</div></div>
+    <div class="module-card" id="card-special">
+      <div class="m-main"><div class="m-title">专项练习</div><div class="m-desc">单选 · 多选 · 判断 · 每次20题</div></div>
+      <span class="m-arrow">›</span>
+    </div>
+    <div class="module-card" id="card-speed">
+      <div class="m-main"><div class="m-title">速刷模式</div><div class="m-desc">按题型序号刷题 · 对错即时显现 · 解析点按再看</div></div>
       <span class="m-arrow">›</span>
     </div>
     <div class="module-card" id="card-changes">
-      <div class="m-main"><div class="m-title">法条变动对照</div><div class="m-desc">旧法命题 · 新规对照 · 集中翻阅</div></div>
-      <span class="m-badge" id="changes-badge">0</span><span class="m-arrow">›</span>
+      <div class="m-main"><div class="m-title">法条变动与错题标记</div><div class="m-desc" id="changes-desc">旧法命题 · 疑似错题 · 集中翻阅</div></div>
+      <span class="m-arrow">›</span>
     </div>
     <div class="module-card" id="card-wrong">
       <div class="m-main"><div class="m-title">错题本</div><div class="m-desc">重做消灭 · 连对2次自动移出</div></div>
@@ -67,6 +71,29 @@
     <button class="link-danger" id="btn-reset">清空数据</button>
   </section>
 
+  <!-- 专项练习 -->
+  <section class="screen" id="screen-special">
+    <header class="nav-bar">
+      <button class="nav-btn" id="spec-back">‹ 返回</button>
+      <span class="nav-title">专项练习</span>
+      <span class="nav-spacer"></span>
+    </header>
+    <div class="spec-list">
+      <div class="module-card" id="spec-single">
+        <div class="m-main"><div class="m-title">单选专项</div><div class="m-desc" id="spec-d-single">只练单选题 · 每次20题</div></div>
+        <span class="m-arrow">›</span>
+      </div>
+      <div class="module-card" id="spec-multiple">
+        <div class="m-main"><div class="m-title">多选专项</div><div class="m-desc" id="spec-d-multiple">只练多选题 · 每次20题</div></div>
+        <span class="m-arrow">›</span>
+      </div>
+      <div class="module-card" id="spec-judge">
+        <div class="m-main"><div class="m-title">判断专项</div><div class="m-desc" id="spec-d-judge">只练判断题 · 每次20题</div></div>
+        <span class="m-arrow">›</span>
+      </div>
+    </div>
+  </section>
+
   <!-- 刷题 / 错题重做 -->
   <section class="screen" id="screen-practice">
     <header class="nav-bar">
@@ -77,15 +104,42 @@
     <div id="p-body"></div>
   </section>
 
-  <!-- 法条变动对照 -->
+  <!-- 法条变动与错题标记 -->
   <section class="screen" id="screen-changes">
     <header class="nav-bar">
       <button class="nav-btn" id="ch-back">‹ 返回</button>
-      <span class="nav-title">法条变动对照</span>
+      <span class="nav-title">法条变动与错题标记</span>
       <button class="nav-btn" id="ch-errata">我的纠错</button>
     </header>
+    <div class="filter-row" id="ch-tabs"></div>
     <div class="filter-row" id="ch-filter"></div>
     <div id="ch-list"></div>
+  </section>
+
+  <!-- 速刷：题型 + 序号宫格 -->
+  <section class="screen" id="screen-speed">
+    <header class="nav-bar">
+      <button class="nav-btn" id="sp-back">‹ 返回</button>
+      <span class="nav-title">速刷模式</span>
+      <span class="nav-spacer"></span>
+    </header>
+    <div class="filter-row" id="sp-tabs"></div>
+    <div class="speed-legend">
+      <span><i class="lg-done"></i>已刷对</span>
+      <span><i class="lg-bad"></i>做错</span>
+      <span><i class="lg-todo"></i>未刷</span>
+    </div>
+    <div class="pal-grid speed-grid" id="sp-grid"></div>
+  </section>
+
+  <!-- 速刷：连续答题 -->
+  <section class="screen" id="screen-speed-run">
+    <header class="nav-bar">
+      <button class="nav-btn" id="sr-back">‹ 返回宫格</button>
+      <span class="nav-title" id="sr-title">速刷</span>
+      <span class="nav-spacer"></span>
+    </header>
+    <div id="sr-body"></div>
   </section>
 
   <!-- 错题本列表 -->
@@ -95,6 +149,7 @@
       <span class="nav-title">错题本</span>
       <button class="nav-btn" id="w-redo">重做</button>
     </header>
+    <div class="filter-row" id="w-redo-filter"></div>
     <div class="filter-row" id="w-filter"></div>
     <div id="w-list"></div>
   </section>

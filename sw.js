@@ -1,7 +1,7 @@
 // 刷题助手 Service Worker：预缓存全部应用资源，改版本号即可全量更新
 // 仅在 http(s) 环境注册（Android 壳走 file:// 不受影响）
 'use strict';
-var CACHE = 'sqt-v6.3-202609301831';
+var CACHE = 'sqt-v6.5-202610141448';
 var ASSETS = [
   './',
   'index.html',
